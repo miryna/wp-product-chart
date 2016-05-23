@@ -95,14 +95,14 @@ Copyright 2016
 	/**
 	*	The source data for the chart
 	*/
-	$data_string = $productchart_data->data();
+	$pch_data_string = $productchart_data->data();
 	
 	function productchart_callback( $atts, $content="" ) {
 		
-		global $data_string;
+		global $pch_data_string;
 		$str = "";
 	
-		if($data_string){	
+		if($pch_data_string){	
 			$str = <<<TTT
 			<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
 			
@@ -112,7 +112,7 @@ Copyright 2016
 
 			  function drawChart() {
 				var data = google.visualization.arrayToDataTable([
-					$data_string	   
+					$pch_data_string	   
 				]);
 
 				var options = {

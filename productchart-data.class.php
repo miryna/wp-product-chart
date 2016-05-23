@@ -7,26 +7,73 @@ if ( ! defined( 'ABSPATH' ) ) {
 		
 class ProductChart_Data{
 
-	//Plugin settings
+	/**
+	* Plugin settings 
+	* @string "private"
+	* or @string "remote"
+	*/
 	private  $_connect;
+
+	/**
+	* Plugin settings 
+	* @string in case $_connect == "remote"
+	* @null in case $_connect == "local"
+	*/	
 	private  $_remote_host;
 	private  $_remote_db;
 	private  $_remote_user;
 	private  $_remote_pass;
 	
-	//Link of the remote DB connection
+	/**
+	* Link of the remote DB connection
+	* @resource in case $_connect == "remote"
+	* @null in case $_connect == "local"
+	*/	
 	private  $_remote_link;
 	
-	//Message on the settings page
+	/**
+	* Message on the admin settings page of this plugin
+	* @string
+	*/
 	public  $info_connect;
 
-	//DB queries	
+	/**
+	* DB queries
+	* @string
+	*/	
 	protected static $_query_categories;
 	protected static $_query_products;	
-
-	//results of DB queries	
+	
+	/**
+	* Results of DB queries
+	* @object
+	*/
 	protected $_result_categories;
-	protected $_result_products;	
+	protected $_result_products;
+
+	/**
+	* @array
+	* Each  ID of category (key) being the ID of top category (value)
+	*/
+	protected $supercat = array();
+
+	/**
+	* @array
+	* Each  ID of category (key) being the name of category (value)
+	*/
+	protected $namecat = array();
+
+	/**
+	* @array
+	* Notes the top categories, which were selling
+	*/
+	protected $names = array();
+
+	/**
+	* @array
+	* A two-dimensional array: each Day (key) being a subarray sales in top categories ( ID category (key) => number of sales (value))
+	*/
+	protected $data = array();
 
 
 	public function __construct() {
@@ -41,7 +88,6 @@ class ProductChart_Data{
 			$this->_remote_pass = get_option('pch_pass');
 			
 		}
-	
 		
 		self::$_query_categories = '
 		
@@ -81,7 +127,11 @@ class ProductChart_Data{
 
 		
 	/**
-	* Main function for the data of product-chart
+	* Main function for the data processing of product-chart, returns the final string to pass to the Google Chart
+	*
+	* no params
+	* @return string in success case, false in case of failure
+	*
 	**/	
 	public function data(){
 	
@@ -112,9 +162,9 @@ class ProductChart_Data{
 		
 		if(	$result_cat && $result_prod ){
 			
-			$data_string = $this->data_processing();
+			$this->data_string = $this->data_processing();
 			
-			return $data_string;
+			return $this->data_string;
 			
 		}else{
 			
@@ -126,8 +176,11 @@ class ProductChart_Data{
 // ======================= LOCAL DB Processing 
 	
 	/**
-	* Get an array of all the categories from local DB
-	* Get an array of all the category names from local DB
+	* Get an array of all categories from local DB
+	* Get an array of all category names from local DB
+	*
+	* no params
+	* @return bool
 	*/	
 	public function db_result_categories(){
 
@@ -140,12 +193,8 @@ class ProductChart_Data{
 				return false;
 			}
 
-		//  Array: all categories => parents
 		$cat = array();
-		
-		// Array:  all categories => names
-		global $namecat;
-		$namecat = array();
+		// Each  ID of category (key) being the ID of parent category (value)
 		
 		foreach ($this->_result_categories as $ct)
 		{
@@ -153,14 +202,9 @@ class ProductChart_Data{
 			$ct->pg_supergroupid =($ct->pg_supergroupid)*1;
 				
 			$cat[$ct->pg_id] = $ct->pg_supergroupid;
-			$namecat[$ct->pg_id] = $ct->pg_nameshort;
+			$this->namecat[$ct->pg_id] = $ct->pg_nameshort;
 		}
 		
-		//	Find the top category for each category
-
-		global $supercat;
-		$supercat = array();
-				
 		foreach($cat as $key => $value){
 			
 			$k = $key;
@@ -168,8 +212,7 @@ class ProductChart_Data{
 
 			while($v){
 				if($k == $v){
-					global $supercat;
-					$supercat[$key] = $v;
+					$this->supercat[$key] = $v;
 					break;
 				}
 				else{
@@ -183,14 +226,18 @@ class ProductChart_Data{
 			}
 		}
 
-		unset($cat);		
+		unset($cat);
 	
-		return true;	
+		return true;
 	}
 	
 	/**
-	* Find the sales for each category for each day (daily sales) from local DB
-	**/
+	 * Find the sales for each category for each day (daily sales) from local DB
+	 *
+	 * no params
+	 * @return bool
+	 *
+	*/
 	public function db_result_products(){
 		
 		global $wpdb;
@@ -202,25 +249,16 @@ class ProductChart_Data{
 			return false;
 		}
 			
-		global $supercat;
-		
-		// Array of sales
-		global $data;
-		$data = array();
-		
-		// The categories in which were  sales
-		global $names;
-		$names = array();			
-		
-		// Fill a two-dimensional array: Day => subarray sales in top categories
+
 		foreach ($this->_result_products as $item) 	
 		{
-			if(array_key_exists($item->p_productgroupid, $supercat)){
-				
-				$data[$item->date][$supercat[$item->p_productgroupid]] += $item->numsales;
+			if(array_key_exists($item->p_productgroupid, $this->supercat)){
+
+				// Fill a two-dimensional array: Day => subarray sales in top categories
+				$this->data[$item->date][$this->supercat[$item->p_productgroupid]] += $item->numsales;
 				
 				// Note the top categories, which were selling
-				$names[$supercat[$item->p_productgroupid]] = true;
+				$this->names[$this->supercat[$item->p_productgroupid]] = true;
 			}
 		}		
 	
@@ -232,20 +270,24 @@ class ProductChart_Data{
 
 	/**
 	* Establish a connection to the remote database
+	*
+	* no params
+	* @return bool
 	*/
 	public  function remotedb_connect(){
-		
+
+		//This message will display if the following function @mysqli_connect() completed a fatal error 
 		$this->info_connect = '<br><b>Fatal error database connection!</b>
 		<br>Site up and running in emergency mode.
 		<br>Probably, your settings are not correct...
-		<br>You should change settings or switch to the local connection.';		
+		<br>You should change settings or switch to the local connection.';
 	
-		//Use if to prevent fatal error
+		//Use IF to prevent fatal error on the html page
 		if(!$this->_remote_link = @mysqli_connect($this->_remote_host, $this->_remote_user, $this->_remote_pass, $this->_remote_db) ){
 			return false;
 		}
 		
-		$this->info_connect = '<br>Connection is established... ';	
+		$this->info_connect = '<br>Connection is established... ';
 
 		$this->_result_categories = mysqli_query($this->_remote_link,self::$_query_categories);
 			
@@ -273,30 +315,24 @@ class ProductChart_Data{
 	/**
 	* Get an array of all the categories from remote DB
 	* Get an array of all the category names from remote DB
+	*
+	* no params
+	* @return bool
 	*/	
 	public  function remotedb_result_categories(){
-	
-		//  Array: all categories => parents
+
 		$cat = array();
+		// Each  ID of category (key) being the ID of parent category (value)
 		
-		// Array:  all categories => names
-		global $namecat;
-		$namecat = array();
-	
 		while($ct = @mysqli_fetch_assoc($this->_result_categories))
 		{
 			$ct['pg_id'] =$ct['pg_id']*1;
 			$ct['pg_supergroupid'] =$ct['pg_supergroupid']*1;
 				
 			$cat[$ct['pg_id']] = $ct['pg_supergroupid'];
-			$namecat[$ct['pg_id']] = $ct['pg_nameshort'];
+			// Fill an array: the ID of category => the name of category
+			$this->namecat[$ct['pg_id']] = $ct['pg_nameshort'];
 		}
-		
-		/**
-		*	Find the top category for each category
-		*/
-		global $supercat;
-		$supercat = array();
 				
 		foreach($cat as $key => $value){
 			
@@ -305,8 +341,7 @@ class ProductChart_Data{
 
 			while($v){
 				if($k == $v){
-					global $supercat;
-					$supercat[$key] = $v;
+					$this->supercat[$key] = $v;
 					break;
 				}
 				else{
@@ -329,28 +364,21 @@ class ProductChart_Data{
 
 	/**
 	* Find the sales for each category for each day (daily sales) from remote DB
+	*
+	* no params
+	* @return bool	
 	**/	
 	public  function remotedb_result_products(){
 
-		global $supercat;
-		
-		// Array of sales
-		global $data;
-		$data = array();
-		
-		// The categories in which were  sales
-		global $names;
-		$names = array();
-			
-		// Fill a two-dimensional array: Day => subarray sales in top categories 
-		while($item = @mysqli_fetch_assoc($this->_result_products)) 	
+		while($item = @mysqli_fetch_assoc($this->_result_products))
 		{
-			if(array_key_exists($item['p_productgroupid'], $supercat)){
-				
-				$data[$item['date']][$supercat[$item['p_productgroupid']]] += $item['numsales'];
+			if(array_key_exists($item['p_productgroupid'], $this->supercat)){
+
+				// Fill a two-dimensional array: Day => subarray sales in top categories 
+				$this->data[$item['date']][$this->supercat[$item['p_productgroupid']]] += $item['numsales'];
 				
 				// Note the top categories, which were selling
-				$names[$supercat[$item['p_productgroupid']]] = true;
+				$this->names[$this->supercat[$item['p_productgroupid']]] = true;
 			}
 		}
 
@@ -358,80 +386,78 @@ class ProductChart_Data{
 	}
 	
 	
-// ======================= DATA Processing 
-
 	/**
+	* DATA Processing 
+	*
 	* Process data for the resulting string
+	*
+	* no params
+	* @return string
 	**/		
 	public function data_processing(){
 		
-		global $namecat;
-		global $data;
-		global $names;
+		// Get a uniform top sales subarrays categories for all days:
+		// Supplement subarrays top categories in which no sales on a particular day, but were selling on other days
 		
-		/**
-		* Get a uniform top sales subarrays categories for all days:
-		* Supplement subarrays top categories in which no sales on a particular day, but were selling on other days
-		*/
-		foreach($data as $data_key => $data_value){	
+		foreach($this->data as $this->data_key => $this->data_value){	
 
-			foreach ( $names as $names_key => $names_value){
-				if(!array_key_exists($names_key, $data_value)){
+			foreach ( $this->names as $this->names_key => $this->names_value){
+				if(!array_key_exists($this->names_key, $this->data_value)){
 					
-					$data[$data_key][$names_key] = 0;
+					$this->data[$this->data_key][$this->names_key] = 0;
 				}
 			}
-			ksort($data[$data_key]);
+			ksort($this->data[$this->data_key]);
 			
 		}
-
 		
-		/**
-		*	Find names for the top categories, which were selling
-		*/
-		foreach($names as $sale_key => $sale_value){
+		//	Find names for the top categories, which were selling
+		
+		foreach($this->names as $sale_key => $sale_value){
 			
 			if(!$sale_value)
-				unset ($names[$sale_key]);
+				unset ($this->names[$sale_key]);
 			
 			else
-				$names[$sale_key] = $namecat[$sale_key];
+				$this->names[$sale_key] = $this->namecat[$sale_key];
 		}
-		unset($namecat);
+		unset($this->namecat);
 
 		// Sort an array of the names of top categories
-		ksort($names);
+		ksort($this->names);
 
 		
-		/**
-		*	Form the final string to pass to the Google Chart
-		*/	
-		$data_string = '';
-		$data_string .= "[ 'Category', ";
+		//	Form the final string to pass to the Google Chart
 
-		foreach($names as $name){
-			$data_string .= "'";
-			$data_string .= $name;
-			$data_string .= "', ";	
+		$this->data_string = '';
+		$this->data_string .= "[ 'Category', ";
+
+		foreach($this->names as $name){
+			$this->data_string .= "'";
+			$this->data_string .= $name;
+			$this->data_string .= "', ";	
 		}
 		
-		$data_string .= "{ role: 'annotation' } ]," ;
+		$this->data_string .= "{ role: 'annotation' } ]," ;
 
-		foreach($data as $datakey => $datavalue){
-				$data_string .= " [ '";
-				$data_string .= $datakey; 
-				$data_string .= "', ";
-				$data_string .= implode(", ", $datavalue); 
-				$data_string .= ", '']," ;
+		foreach($this->data as $this->datakey => $this->datavalue){
+				$this->data_string .= " [ '";
+				$this->data_string .= $this->datakey; 
+				$this->data_string .= "', ";
+				$this->data_string .= implode(", ", $this->datavalue); 
+				$this->data_string .= ", '']," ;
 		}
 
-		return $data_string;
+		return $this->data_string;
 	
 	}
 
 	
 	/**
-	* Messages about connecting to the database to display on the settings page
+	* get messages about connecting to database to display on the settings page
+	*
+	* no params
+	* @return string
 	**/		
 	public function info(){
 		

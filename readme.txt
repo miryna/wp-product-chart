@@ -14,7 +14,9 @@ The plugin displays daily sales information in groups of products in the form of
 
 The plugin displays daily sales information in groups of products in the form of a bar chart with Google Charts. Data tables can be located in local or remote database. Grouping categories is implemented on the parent of the top-level groups.
 The short code can be placed anywhere in the text of the post/page.
- 
+
+Note: Product Chart will not work in old versions of Internet Explorer. (IE8 and earlier versions don't support SVG, which Product Chart require.) 
+
 For more details see the help pages of the Google Chart library.
 
 
@@ -32,13 +34,6 @@ For more details see the help pages of the Google Chart library.
 For more details on the supported options for each chart, refer to the google's developer page at https://google-developers.appspot.com/chart/interactive/docs/gallery
 
 
-= Supported attributes to the short codes =
-
-* "width" Width of the graph (including the legend, titile and axes labels)
-* "height" Height of the graph (including the legend, titile and axes labels)
-* "title" Title of the graph
-
-
 == Screenshots ==
 
 1. screenshot-page-settings.JPG
@@ -53,3 +48,6 @@ For more details on the supported options for each chart, refer to the google's 
 
 == Upgrade Notice ==
 
+= 0.9 =
+* Removed global variables in productchart-data.class
+* Added standard comments

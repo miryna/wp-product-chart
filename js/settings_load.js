@@ -1,5 +1,5 @@
 
-/*  loads the the template whith settings of remote database connection */
+/*  loads the template whith settings of remote database connection */
 	
 jQuery(document).ready(function($) {
 	
@@ -10,10 +10,11 @@ jQuery(document).ready(function($) {
 	$('#connect_remote').click(function(){
 		
 	/*	$('#pch_show').css('display', 'block');  */
+	/*  http://localhost/wp44widget/wp-admin/admin.php?page=settings_ajax.php  */
 	
 		if($('#connect_remote').is(':checked')){
 		
-			$("#settings_ajax").load( "http://localhost/wp44widget/wp-admin/admin.php?page=settings_ajax.php #ajax_submenu_page_callback" );
+			$("#settings_ajax").load( "/wp-admin/admin.php?page=settings_ajax.php #ajax_submenu_page_callback" );
 
 			$('#settings_ajax').css('display', 'block');
 			$('#pch_show').css('display', 'none');	
